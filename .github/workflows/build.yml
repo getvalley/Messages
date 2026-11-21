@@ -1,0 +1,45 @@
+name: Build Sutra APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Sutra*.zip"                    # the app project zip in the repo root
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          set -e
+          ZIP=$(ls Sutra*.zip 2>/dev/null | head -n1)
+          test -n "$ZIP" || { echo "No Sutra*.zip found in the repo root"; exit 1; }
+          echo "Using $ZIP"
+          unzip -q -o "$ZIP"
+          SETTINGS=$(find . -maxdepth 2 -name settings.gradle.kts | head -n1)
+          test -n "$SETTINGS" || { echo "settings.gradle.kts not found after unzip"; exit 1; }
+          echo "PROJ=$(dirname "$SETTINGS")" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Build debug APK
+        working-directory: ${{ env.PROJ }}
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sutra-debug
+          path: ${{ env.PROJ }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
